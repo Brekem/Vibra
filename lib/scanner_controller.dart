@@ -170,7 +170,10 @@ class ScannerController extends ChangeNotifier {
     _peaks = analyzer.peaks;
     if (_peaks.isNotEmpty) _tracker.add(_peaks.first.frequency, _peaks.first.db);
     final previous = suggested?.label;
-    _recommendations = recommendTestFrequencies(_peaks);
+    _recommendations = recommendTestFrequencies(
+      _peaks,
+      missingFrequency: analyzer.bands.leastPresent()?.frequency,
+    );
     // Mantiene seleccionada la misma categoría de sugerencia si sigue existiendo.
     final idx = _recommendations.indexWhere((r) => r.label == previous);
     _selected = idx >= 0 ? idx : 0;
@@ -279,21 +282,25 @@ class ScannerController extends ChangeNotifier {
     if (!_cycleActive) return;
     final stable = _tracker.stableFrequency;
     final db = dominant?.db ?? 0;
+    // Energía por bandas acumulada durante todo el escaneo de esta fase.
+    final missing = analyzer.bands.leastPresent()?.frequency;
     await stopScan();
-    if (stable == null) {
+    if (stable == null && missing == null) {
       _message = 'No se detectó ninguna frecuencia predominante; se repite el escaneo.';
       await _beginScanPhase();
       return;
     }
-    // Sugerencias calculadas con la frecuencia más estable de todo el minuto,
-    // manteniendo el tipo de sugerencia que el usuario tenía seleccionado.
+    // Sugerencias calculadas con todo el minuto de escaneo, manteniendo el
+    // tipo de sugerencia seleccionado (por defecto, la frecuencia ausente).
     final previous = suggested?.label;
-    _recommendations = recommendTestFrequencies([FrequencyPeak(frequency: stable, db: db)]);
+    _recommendations = recommendTestFrequencies([
+      if (stable != null) FrequencyPeak(frequency: stable, db: db),
+    ], missingFrequency: missing);
     final idx = _recommendations.indexWhere((r) => r.label == previous);
     _selected = idx >= 0 ? idx : 0;
 
     _phase = CyclePhase.playing;
-    await playTone(suggested?.frequency ?? stable);
+    await playTone(suggested!.frequency);
     _schedulePhase(cyclePlayDuration, _endPlayPhase);
   }
 

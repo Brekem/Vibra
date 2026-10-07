@@ -21,7 +21,12 @@ afirmación médica, terapéutica ni de otro tipo.
 - **Detección de picos predominantes**: máximos locales que superan en 12 dB la
   mediana del espectro (ruido de fondo), sobre un espectro promediado para
   mayor estabilidad. Se descartan picos a menos del 2 % de otro más fuerte.
-- **Frecuencias de prueba sugeridas** a partir del pico dominante: el propio
+- **Frecuencia ausente** (sugerencia principal): se acumula la energía media
+  por bandas de 1/3 de octava (ISO 266) durante el escaneo y se elige la banda
+  entre 200 Hz y 8 kHz con menos energía respecto a un espectro equilibrado
+  (ruido rosa, plano en 1/3 de octava). Es la frecuencia que menos presencia
+  tiene en tu ambiente.
+- **Otras frecuencias sugeridas** a partir del pico dominante: el propio
   pico, la nota afinada más cercana (A4 = 440 Hz), octava inferior y superior,
   banda de 1/3 de octava ISO 266 más cercana y segundo pico.
 - **Generador de tonos** nativo (AudioTrack, 48 kHz) con fase continua y
@@ -29,8 +34,8 @@ afirmación médica, terapéutica ni de otro tipo.
 - Controles para **iniciar / detener**, ajustar frecuencia (±1 / ±10 Hz) y
   **volumen**.
 - **Modo continuo** (infinito): 1 min de escaneo → 10 min reproduciendo la
-  frecuencia sugerida calculada con la frecuencia dominante más estable de ese
-  minuto → nuevo escaneo, y así indefinidamente hasta detenerlo.
+  frecuencia sugerida calculada con ese
+  minuto (por defecto, la frecuencia ausente) → nuevo escaneo, y así indefinidamente hasta detenerlo.
 - **Pantalla encendida** mientras se escanea (`FLAG_KEEP_SCREEN_ON`).
 - **Audio en segundo plano**: un servicio en primer plano (tipos
   `mediaPlayback` y `microphone`) con notificación y botón *Detener* mantiene el

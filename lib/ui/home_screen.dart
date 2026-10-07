@@ -235,7 +235,8 @@ class _CycleCard extends StatelessWidget {
         children: [
           Text(
             'Repite sin fin: $scanMin min de escaneo y $playMin min reproduciendo la '
-            'frecuencia sugerida obtenida en ese escaneo.',
+            'frecuencia sugerida en ese escaneo (por defecto, la frecuencia que menos '
+            'está presente en tu ambiente).',
             style: const TextStyle(fontSize: 13, color: AppColors.textMuted),
           ),
           const SizedBox(height: 12),
@@ -650,8 +651,8 @@ class _SuggestionsCard extends StatelessWidget {
       title: 'Frecuencias de prueba sugeridas',
       child: items.isEmpty
           ? const _EmptyHint(
-              'Las sugerencias se calculan a partir de la '
-              'frecuencia dominante detectada.',
+              'Escanea para calcular la frecuencia ausente en tu ambiente y '
+              'otras frecuencias relacionadas con el pico dominante.',
             )
           : Column(
               children: [

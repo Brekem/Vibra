@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:frequency_scanner/audio/band_analysis.dart';
 import 'package:frequency_scanner/audio/dominant_tracker.dart';
 import 'package:frequency_scanner/audio/fft.dart';
 import 'package:frequency_scanner/audio/recommendations.dart';
@@ -100,5 +101,31 @@ void main() {
     expect(tracker.stableFrequency, 440.0);
     tracker.reset();
     expect(tracker.stableFrequency, isNull);
+  });
+
+  test('Frecuencia ausente: banda con menos energía respecto a ruido rosa', () {
+    const binHz = 44100 / 8192;
+    const bins = 4097;
+    final acc = BandEnergyAccumulator(binHz: binHz, binCount: bins);
+    expect(acc.leastPresent(), isNull);
+    // Espectro rosa (potencia ∝ 1/f) con un hueco en la banda de 1 kHz.
+    final power = Float64List(bins);
+    for (var k = 1; k < bins; k++) {
+      final f = k * binHz;
+      power[k] = (f > 880 && f < 1130) ? 1e-9 / k : 1e-3 / k;
+    }
+    acc.addFrame(power);
+    final missing = acc.leastPresent()!;
+    expect(missing.frequency, 1000);
+    expect(missing.deficitDb, greaterThan(20));
+  });
+
+  test('La frecuencia ausente es la primera sugerencia', () {
+    final recs = recommendTestFrequencies(const [
+      FrequencyPeak(frequency: 440, db: -20),
+    ], missingFrequency: 2500);
+    expect(recs.first.label, missingLabel);
+    expect(recs.first.frequency, 2500);
+    expect(recommendTestFrequencies(const [], missingFrequency: 630).single.frequency, 630);
   });
 }

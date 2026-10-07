@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:frequency_scanner/audio/recommendations.dart';
 import 'package:frequency_scanner/audio/tone_generator.dart';
 import 'package:frequency_scanner/platform/system_controls.dart';
 import 'package:frequency_scanner/scanner_controller.dart';
@@ -106,7 +107,10 @@ void main() {
     expect(c.cyclePhase, CyclePhase.playing);
     expect(c.isScanning, isFalse);
     expect(c.isPlaying, isTrue);
-    expect(tone.frequency, closeTo(1000, 2));
+    // Por defecto suena la frecuencia ausente (no el tono de 1 kHz captado).
+    expect(c.suggested!.label, missingLabel);
+    expect(iso266ThirdOctave, contains(tone.frequency));
+    expect(tone.frequency, isNot(1000));
     expect(system.calls, contains('screen:false'));
 
     await Future<void>.delayed(const Duration(milliseconds: 300));

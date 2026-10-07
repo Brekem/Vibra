@@ -84,12 +84,17 @@ double nearestIsoBand(double frequency) {
   return best;
 }
 
-/// Genera frecuencias de prueba relacionadas técnicamente con los picos
-/// detectados: el propio pico, la nota afinada más cercana, sus octavas, la
-/// banda normalizada de 1/3 de octava y el segundo pico más intenso.
-List<TestFrequency> recommendTestFrequencies(List<FrequencyPeak> peaks) {
-  if (peaks.isEmpty) return const [];
-  final f0 = peaks.first.frequency;
+/// Etiqueta de la sugerencia principal: la frecuencia que falta en el ambiente.
+const missingLabel = 'Frecuencia ausente';
+
+/// Genera las frecuencias sugeridas. La primera (y seleccionada por defecto)
+/// es la banda menos presente en el ambiente ([missingFrequency]); después,
+/// frecuencias relacionadas con el pico dominante: el propio pico, la nota
+/// afinada más cercana, sus octavas, su banda de 1/3 de octava y el segundo pico.
+List<TestFrequency> recommendTestFrequencies(
+  List<FrequencyPeak> peaks, {
+  double? missingFrequency,
+}) {
   final result = <TestFrequency>[];
 
   void add(double f, String label, String detail) {
@@ -98,6 +103,16 @@ List<TestFrequency> recommendTestFrequencies(List<FrequencyPeak> peaks) {
     if (result.any((r) => (r.frequency - rounded).abs() < 0.5)) return;
     result.add(TestFrequency(frequency: rounded, label: label, detail: detail));
   }
+
+  if (missingFrequency != null) {
+    add(
+      missingFrequency,
+      missingLabel,
+      'La banda con menos energía en tu ambiente (1/3 de octava, 200 Hz–8 kHz)',
+    );
+  }
+  if (peaks.isEmpty) return result;
+  final f0 = peaks.first.frequency;
 
   add(f0, 'Pico dominante', 'Reproduce la componente principal detectada');
 

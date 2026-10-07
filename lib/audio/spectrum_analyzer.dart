@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import '../models/frequency_peak.dart';
+import 'band_analysis.dart';
 import 'fft.dart';
 
 /// Analizador de espectro en tiempo real.
@@ -23,6 +24,7 @@ class SpectrumAnalyzer {
        _re = Float64List(fftSize),
        _im = Float64List(fftSize),
        _avgPower = Float64List(fftSize ~/ 2 + 1),
+       _power = Float64List(fftSize ~/ 2 + 1),
        displayDb = Float64List(fftSize ~/ 2 + 1)..fillRange(0, fftSize ~/ 2 + 1, minDb),
        averageDb = Float64List(fftSize ~/ 2 + 1)..fillRange(0, fftSize ~/ 2 + 1, minDb) {
     var sum = 0.0;
@@ -53,6 +55,13 @@ class SpectrumAnalyzer {
   final Float64List _re;
   final Float64List _im;
   final Float64List _avgPower;
+  final Float64List _power;
+
+  /// Energía media por bandas de 1/3 de octava desde el último [reset].
+  late final BandEnergyAccumulator bands = BandEnergyAccumulator(
+    binHz: sampleRate / fftSize,
+    binCount: fftSize ~/ 2 + 1,
+  );
 
   int _writePos = 0;
   int _filled = 0;
@@ -77,6 +86,7 @@ class SpectrumAnalyzer {
   int get binCount => fftSize ~/ 2 + 1;
 
   void reset() {
+    bands.reset();
     _ring.fillRange(0, _ring.length, 0);
     _avgPower.fillRange(0, _avgPower.length, 0);
     displayDb.fillRange(0, displayDb.length, minDb);
@@ -137,10 +147,12 @@ class SpectrumAnalyzer {
       final prev = displayDb[k];
       displayDb[k] = db >= prev ? db : math.max(db, prev - displayReleaseDb);
 
+      _power[k] = amp * amp;
       _avgPower[k] = _avgPower[k] * (1 - a) + amp * amp * a;
       averageDb[k] = _toDb(math.sqrt(_avgPower[k]));
     }
 
+    bands.addFrame(_power);
     peaks = findPeaks(averageDb, binHz);
   }
 
