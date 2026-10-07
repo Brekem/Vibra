@@ -129,4 +129,35 @@ void main() {
     expect(system.calls.last, 'stop');
     c.dispose();
   });
+
+  test('Se puede elegir frecuencia presente o escribirla a mano', () async {
+    final tone = FakeTone();
+    final c = ScannerController(
+      recorder: FakeRecorder(),
+      toneGenerator: tone,
+      systemControls: FakeSystem(),
+      cycleScanDuration: const Duration(milliseconds: 400),
+      cyclePlayDuration: const Duration(milliseconds: 300),
+    );
+
+    // Presente: en el modo continuo suena el pico dominante (1 kHz).
+    c.setSource(FrequencySource.present);
+    await c.startCycle();
+    await Future<void>.delayed(const Duration(milliseconds: 550));
+    expect(c.cyclePhase, CyclePhase.playing);
+    expect(tone.frequency, closeTo(1000, 2));
+
+    // Manual mientras suena: cambia el tono al instante.
+    await c.setManualFrequency(528);
+    expect(c.source, FrequencySource.manual);
+    expect(tone.frequency, 528);
+
+    // El siguiente ciclo sigue usando la frecuencia manual.
+    await Future<void>.delayed(const Duration(milliseconds: 750));
+    expect(c.cyclePhase, CyclePhase.playing);
+    expect(tone.frequency, 528);
+
+    await c.stopAll();
+    c.dispose();
+  });
 }

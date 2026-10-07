@@ -13,6 +13,18 @@ import 'platform/system_controls.dart';
 /// Fase actual del modo continuo.
 enum CyclePhase { scanning, playing }
 
+/// Qué frecuencia se reproduce con "Reproducir" y en el modo continuo.
+enum FrequencySource {
+  /// La banda menos presente en el ambiente.
+  missing,
+
+  /// El pico dominante (la frecuencia más presente).
+  present,
+
+  /// Una frecuencia escrita por el usuario.
+  manual,
+}
+
 /// Estado de la aplicación: captura de micrófono, análisis, generador de tonos
 /// y modo continuo (ciclos de escaneo + reproducción que se repiten sin fin).
 class ScannerController extends ChangeNotifier {
@@ -52,7 +64,9 @@ class ScannerController extends ChangeNotifier {
   bool _playing = false;
   double _volume = 0.3;
   double _toneFrequency = 440;
-  int _selected = 0;
+  String _selectedLabel = missingLabel;
+  bool _manualSelected = false;
+  double _manualFrequency = 432;
   List<FrequencyPeak> _peaks = const [];
   List<TestFrequency> _recommendations = const [];
   String? _message;
@@ -78,7 +92,20 @@ class ScannerController extends ChangeNotifier {
   FrequencyPeak? get dominant => _peaks.isEmpty ? null : _peaks.first;
   double get levelDb => analyzer.levelDb;
   List<TestFrequency> get recommendations => _recommendations;
-  int get selectedRecommendation => _selected;
+  double get manualFrequency => _manualFrequency;
+
+  /// Índice de la sugerencia seleccionada en la lista (-1 si se usa la manual).
+  int get selectedRecommendation =>
+      _manualSelected ? -1 : _recommendations.indexWhere((r) => r.label == _selectedLabel);
+
+  /// Fuente de frecuencia elegida, o null si se seleccionó otra sugerencia de la lista.
+  FrequencySource? get source {
+    if (_manualSelected) return FrequencySource.manual;
+    if (_selectedLabel == missingLabel) return FrequencySource.missing;
+    if (_selectedLabel == presentLabel) return FrequencySource.present;
+    return null;
+  }
+
   bool get isCycleActive => _cycleActive;
   CyclePhase get cyclePhase => _phase;
   int get cycleCount => _cycleCount;
@@ -91,9 +118,20 @@ class ScannerController extends ChangeNotifier {
     return left.isNegative ? Duration.zero : left;
   }
 
-  TestFrequency? get suggested => _recommendations.isEmpty
-      ? null
-      : _recommendations[_selected.clamp(0, _recommendations.length - 1)];
+  /// Frecuencia que se reproducirá: la manual o la sugerencia seleccionada.
+  TestFrequency? get suggested {
+    if (_manualSelected) {
+      return TestFrequency(
+        frequency: _manualFrequency,
+        label: 'Frecuencia manual',
+        detail: 'Escrita por ti',
+      );
+    }
+    for (final r in _recommendations) {
+      if (r.label == _selectedLabel) return r;
+    }
+    return null;
+  }
 
   /// Mensaje puntual para mostrar al usuario (se consume al leerlo).
   String? takeMessage() {
@@ -169,21 +207,46 @@ class ScannerController extends ChangeNotifier {
     if (frames == 0) return;
     _peaks = analyzer.peaks;
     if (_peaks.isNotEmpty) _tracker.add(_peaks.first.frequency, _peaks.first.db);
-    final previous = suggested?.label;
     _recommendations = recommendTestFrequencies(
       _peaks,
       missingFrequency: analyzer.bands.leastPresent()?.frequency,
     );
-    // Mantiene seleccionada la misma categoría de sugerencia si sigue existiendo.
-    final idx = _recommendations.indexWhere((r) => r.label == previous);
-    _selected = idx >= 0 ? idx : 0;
     notifyListeners();
   }
 
   void selectRecommendation(int index) {
     if (index < 0 || index >= _recommendations.length) return;
-    _selected = index;
+    _selectedLabel = _recommendations[index].label;
+    _manualSelected = false;
     notifyListeners();
+  }
+
+  /// Elige qué frecuencia reproducir: ausente, presente o manual.
+  void setSource(FrequencySource source) {
+    switch (source) {
+      case FrequencySource.missing:
+        _selectedLabel = missingLabel;
+        _manualSelected = false;
+      case FrequencySource.present:
+        _selectedLabel = presentLabel;
+        _manualSelected = false;
+      case FrequencySource.manual:
+        _manualSelected = true;
+    }
+    notifyListeners();
+  }
+
+  /// Fija la frecuencia escrita por el usuario y la selecciona. Si ya suena un
+  /// tono (también durante la reproducción del modo continuo) cambia al momento.
+  Future<void> setManualFrequency(double frequency) async {
+    _manualFrequency = frequency.clamp(minToneHz, maxToneHz).toDouble();
+    _manualSelected = true;
+    if (_playing) {
+      await playTone(_manualFrequency);
+    } else {
+      _toneFrequency = _manualFrequency;
+      notifyListeners();
+    }
   }
 
   /// Reproduce la frecuencia sugerida seleccionada (o la detiene si ya suena).
@@ -191,7 +254,9 @@ class ScannerController extends ChangeNotifier {
     if (_playing) return stopTone();
     final s = suggested;
     if (s == null) {
-      _message = 'Primero escanea el ambiente para obtener una sugerencia.';
+      _message = source == FrequencySource.present
+          ? 'Primero escanea el ambiente para detectar la frecuencia presente.'
+          : 'Primero escanea el ambiente para obtener la frecuencia ausente.';
       notifyListeners();
       return;
     }
@@ -285,19 +350,16 @@ class ScannerController extends ChangeNotifier {
     // Energía por bandas acumulada durante todo el escaneo de esta fase.
     final missing = analyzer.bands.leastPresent()?.frequency;
     await stopScan();
-    if (stable == null && missing == null) {
-      _message = 'No se detectó ninguna frecuencia predominante; se repite el escaneo.';
-      await _beginScanPhase();
-      return;
-    }
-    // Sugerencias calculadas con todo el minuto de escaneo, manteniendo el
-    // tipo de sugerencia seleccionado (por defecto, la frecuencia ausente).
-    final previous = suggested?.label;
+    // Sugerencias calculadas con todo el minuto de escaneo, manteniendo la
+    // fuente elegida (ausente, presente, manual u otra sugerencia de la lista).
     _recommendations = recommendTestFrequencies([
       if (stable != null) FrequencyPeak(frequency: stable, db: db),
     ], missingFrequency: missing);
-    final idx = _recommendations.indexWhere((r) => r.label == previous);
-    _selected = idx >= 0 ? idx : 0;
+    if (suggested == null) {
+      _message = 'No se detectó la frecuencia elegida; se repite el escaneo.';
+      await _beginScanPhase();
+      return;
+    }
 
     _phase = CyclePhase.playing;
     await playTone(suggested!.frequency);

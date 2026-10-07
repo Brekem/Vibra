@@ -26,6 +26,10 @@ afirmación médica, terapéutica ni de otro tipo.
   entre 200 Hz y 8 kHz con menos energía respecto a un espectro equilibrado
   (ruido rosa, plano en 1/3 de octava). Es la frecuencia que menos presencia
   tiene en tu ambiente.
+- **Elección de la frecuencia a reproducir**: *Ausente* (la banda menos
+  presente), *Presente* (el pico dominante) o *Manual* (escribe cualquier valor
+  entre 20 y 20000 Hz). La elección se usa en el botón de reproducir y en el
+  modo continuo; la frecuencia manual cambia al instante si ya está sonando.
 - **Otras frecuencias sugeridas** a partir del pico dominante: el propio
   pico, la nota afinada más cercana (A4 = 440 Hz), octava inferior y superior,
   banda de 1/3 de octava ISO 266 más cercana y segundo pico.
@@ -35,7 +39,7 @@ afirmación médica, terapéutica ni de otro tipo.
   **volumen**.
 - **Modo continuo** (infinito): 1 min de escaneo → 10 min reproduciendo la
   frecuencia sugerida calculada con ese
-  minuto (por defecto, la frecuencia ausente) → nuevo escaneo, y así indefinidamente hasta detenerlo.
+  minuto (ausente, presente o manual, según lo elegido) → nuevo escaneo, y así indefinidamente hasta detenerlo.
 - **Pantalla encendida** mientras se escanea (`FLAG_KEEP_SCREEN_ON`).
 - **Audio en segundo plano**: un servicio en primer plano (tipos
   `mediaPlayback` y `microphone`) con notificación y botón *Detener* mantiene el

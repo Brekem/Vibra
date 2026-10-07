@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../audio/recommendations.dart';
 import '../audio/spectrum_analyzer.dart';
@@ -96,6 +97,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 _ScanButton(controller: c),
                 const SizedBox(height: 16),
                 _CycleCard(controller: c),
+                const SizedBox(height: 16),
+                _SourceCard(controller: c),
                 const SizedBox(height: 16),
                 _DominantCard(controller: c),
                 const SizedBox(height: 16),
@@ -235,8 +238,8 @@ class _CycleCard extends StatelessWidget {
         children: [
           Text(
             'Repite sin fin: $scanMin min de escaneo y $playMin min reproduciendo la '
-            'frecuencia sugerida en ese escaneo (por defecto, la frecuencia que menos '
-            'está presente en tu ambiente).',
+            'frecuencia elegida abajo (ausente, presente o manual), calculada con '
+            'ese escaneo.',
             style: const TextStyle(fontSize: 13, color: AppColors.textMuted),
           ),
           const SizedBox(height: 12),
@@ -347,6 +350,168 @@ class _PhaseStep extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Elección de la frecuencia a reproducir: ausente, presente o escrita a mano.
+class _SourceCard extends StatelessWidget {
+  const _SourceCard({required this.controller});
+
+  final ScannerController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = controller;
+    final source = c.source;
+    final current = c.suggested;
+    final description = switch (source) {
+      FrequencySource.missing => 'La frecuencia que menos está presente en tu ambiente.',
+      FrequencySource.present => 'La frecuencia más presente en tu ambiente (pico dominante).',
+      FrequencySource.manual => 'La frecuencia que escribas tú.',
+      null => 'Otra sugerencia elegida en la lista.',
+    };
+    return _SectionCard(
+      title: 'Frecuencia a reproducir',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SegmentedButton<FrequencySource>(
+            segments: const [
+              ButtonSegment(
+                value: FrequencySource.missing,
+                label: Text('Ausente'),
+                icon: Icon(Icons.trending_down_rounded),
+              ),
+              ButtonSegment(
+                value: FrequencySource.present,
+                label: Text('Presente'),
+                icon: Icon(Icons.trending_up_rounded),
+              ),
+              ButtonSegment(
+                value: FrequencySource.manual,
+                label: Text('Manual'),
+                icon: Icon(Icons.edit_rounded),
+              ),
+            ],
+            selected: {?source},
+            emptySelectionAllowed: true,
+            showSelectedIcon: false,
+            onSelectionChanged: (s) {
+              if (s.isNotEmpty) c.setSource(s.first);
+            },
+            style: SegmentedButton.styleFrom(
+              selectedBackgroundColor: AppColors.green,
+              selectedForegroundColor: Colors.white,
+              foregroundColor: AppColors.greenDark,
+              side: const BorderSide(color: AppColors.green),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  description,
+                  style: const TextStyle(fontSize: 13, color: AppColors.textMuted),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                current == null ? '— Hz' : formatHz(current.frequency),
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.greenDark,
+                  fontFeatures: [FontFeature.tabularFigures()],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _ManualFrequencyField(controller: c),
+        ],
+      ),
+    );
+  }
+}
+
+/// Campo para escribir una frecuencia en Hz (20–20000).
+class _ManualFrequencyField extends StatefulWidget {
+  const _ManualFrequencyField({required this.controller});
+
+  final ScannerController controller;
+
+  @override
+  State<_ManualFrequencyField> createState() => _ManualFrequencyFieldState();
+}
+
+class _ManualFrequencyFieldState extends State<_ManualFrequencyField> {
+  late final TextEditingController _text = TextEditingController(
+    text: _format(widget.controller.manualFrequency),
+  );
+  String? _error;
+
+  static String _format(double f) =>
+      f == f.roundToDouble() ? f.toStringAsFixed(0) : f.toStringAsFixed(1);
+
+  @override
+  void dispose() {
+    _text.dispose();
+    super.dispose();
+  }
+
+  void _apply() {
+    final value = double.tryParse(_text.text.trim().replaceAll(',', '.'));
+    if (value == null ||
+        value < ScannerController.minToneHz ||
+        value > ScannerController.maxToneHz) {
+      setState(() => _error = 'Escribe un valor entre 20 y 20000 Hz');
+      return;
+    }
+    setState(() => _error = null);
+    FocusScope.of(context).unfocus();
+    widget.controller.setManualFrequency(value);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: TextField(
+            controller: _text,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            textInputAction: TextInputAction.done,
+            inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))],
+            onSubmitted: (_) => _apply(),
+            decoration: InputDecoration(
+              labelText: 'Frecuencia manual',
+              hintText: 'p. ej. 528',
+              suffixText: 'Hz',
+              errorText: _error,
+              isDense: true,
+              filled: true,
+              fillColor: AppColors.greenTint,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide.none,
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: AppColors.green, width: 1.5),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 10),
+        FilledButton(
+          onPressed: _apply,
+          style: FilledButton.styleFrom(minimumSize: const Size(88, 48)),
+          child: const Text('Usar'),
+        ),
+      ],
     );
   }
 }
@@ -816,6 +981,8 @@ class _ToneCard extends StatelessWidget {
                   ? 'Detener tono'
                   : suggested == null
                   ? 'Reproducir frecuencia sugerida'
+                  : c.source == FrequencySource.manual
+                  ? 'Reproducir frecuencia elegida · ${formatHz(suggested.frequency)}'
                   : 'Reproducir frecuencia sugerida · ${formatHz(suggested.frequency)}',
             ),
           ),

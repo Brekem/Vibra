@@ -87,6 +87,9 @@ double nearestIsoBand(double frequency) {
 /// Etiqueta de la sugerencia principal: la frecuencia que falta en el ambiente.
 const missingLabel = 'Frecuencia ausente';
 
+/// Etiqueta de la frecuencia más presente (pico dominante) del ambiente.
+const presentLabel = 'Frecuencia presente';
+
 /// Genera las frecuencias sugeridas. La primera (y seleccionada por defecto)
 /// es la banda menos presente en el ambiente ([missingFrequency]); después,
 /// frecuencias relacionadas con el pico dominante: el propio pico, la nota
@@ -114,7 +117,7 @@ List<TestFrequency> recommendTestFrequencies(
   if (peaks.isEmpty) return result;
   final f0 = peaks.first.frequency;
 
-  add(f0, 'Pico dominante', 'Reproduce la componente principal detectada');
+  add(f0, presentLabel, 'El pico dominante: la componente más fuerte de tu ambiente');
 
   final note = MusicalNote.nearest(f0);
   if (note != null) {
