@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:frequency_scanner/audio/dominant_tracker.dart';
 import 'package:frequency_scanner/audio/fft.dart';
 import 'package:frequency_scanner/audio/recommendations.dart';
 import 'package:frequency_scanner/audio/spectrum_analyzer.dart';
@@ -85,5 +86,19 @@ void main() {
     expect(freqs, containsAll([501.6, 2006.4, 1000.0, 3000.0]));
     expect(nearestIsoBand(1003.2), 1000);
     expect(recommendTestFrequencies(const []), isEmpty);
+  });
+
+  test('DominantTracker devuelve la frecuencia dominante más estable', () {
+    final tracker = DominantTracker();
+    expect(tracker.stableFrequency, isNull);
+    for (final f in [440.2, 439.8, 440.0, 440.4, 439.9]) {
+      tracker.add(f, -20);
+    }
+    // Picos esporádicos más fuertes pero menos frecuentes no ganan.
+    tracker.add(1000, -5);
+    tracker.add(1001, -5);
+    expect(tracker.stableFrequency, 440.0);
+    tracker.reset();
+    expect(tracker.stableFrequency, isNull);
   });
 }

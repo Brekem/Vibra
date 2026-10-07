@@ -28,6 +28,13 @@ afirmación médica, terapéutica ni de otro tipo.
   rampas de frecuencia/volumen para evitar chasquidos. Rango 20 Hz – 20 kHz.
 - Controles para **iniciar / detener**, ajustar frecuencia (±1 / ±10 Hz) y
   **volumen**.
+- **Modo continuo** (infinito): 1 min de escaneo → 10 min reproduciendo la
+  frecuencia sugerida calculada con la frecuencia dominante más estable de ese
+  minuto → nuevo escaneo, y así indefinidamente hasta detenerlo.
+- **Pantalla encendida** mientras se escanea (`FLAG_KEEP_SCREEN_ON`).
+- **Audio en segundo plano**: un servicio en primer plano (tipos
+  `mediaPlayback` y `microphone`) con notificación y botón *Detener* mantiene el
+  tono y el escaneo activos con la app minimizada o la pantalla apagada.
 - **Espectro en tiempo real** con eje logarítmico 20 Hz – 20 kHz y marcador del
   pico dominante.
 
@@ -48,6 +55,7 @@ lib/
 android/app/src/main/kotlin/com/brekem/frequency_scanner/
   MainActivity.kt               MethodChannel del generador
   ToneGenerator.kt              Síntesis senoidal con AudioTrack
+  ScannerService.kt             Servicio en primer plano + notificación
 test/                           Pruebas de FFT, picos, PCM, sugerencias y UI
 ```
 
@@ -89,4 +97,7 @@ storeFile=/ruta/a/upload-keystore.jks
 - Empieza con el volumen bajo. Los altavoces de los teléfonos reproducen mal
   frecuencias por debajo de ~150 Hz y por encima de ~16 kHz.
 - Si escaneas mientras suena un tono, el micrófono también lo captará.
-- Al salir de la aplicación se detienen el micrófono y el generador.
+- Al minimizar la app el audio continúa; se detiene con el botón de la
+  notificación, desde la app o al cerrarla desde recientes.
+- En Android 13+ se pide permiso de notificaciones para mostrar el aviso del
+  servicio en segundo plano.

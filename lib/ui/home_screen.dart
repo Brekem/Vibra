@@ -38,9 +38,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    // Android no permite capturar el micrófono en segundo plano sin un
-    // servicio en primer plano: se detiene todo al salir de la app.
-    if (state == AppLifecycleState.paused || state == AppLifecycleState.detached) {
+    // En segundo plano el audio continúa gracias al servicio en primer plano;
+    // solo se detiene todo cuando la app se cierra definitivamente.
+    if (state == AppLifecycleState.detached) {
       _controller.stopAll();
     }
   }
@@ -94,6 +94,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
               children: [
                 _ScanButton(controller: c),
+                const SizedBox(height: 16),
+                _CycleCard(controller: c),
                 const SizedBox(height: 16),
                 _DominantCard(controller: c),
                 const SizedBox(height: 16),
@@ -162,7 +164,7 @@ class _ScanButton extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         FilledButton.icon(
-          onPressed: controller.isBusy ? null : controller.toggleScan,
+          onPressed: controller.isBusy || controller.isCycleActive ? null : controller.toggleScan,
           style: scanning ? FilledButton.styleFrom(backgroundColor: AppColors.greenDark) : null,
           icon: controller.isBusy
               ? const SizedBox(
@@ -195,6 +197,155 @@ class _ScanButton extends StatelessWidget {
           ],
         ),
       ],
+    );
+  }
+}
+
+String formatDuration(Duration d) {
+  final m = d.inMinutes.toString().padLeft(2, '0');
+  final s = (d.inSeconds % 60).toString().padLeft(2, '0');
+  return '$m:$s';
+}
+
+/// Modo continuo: escaneo y reproducción alternados de forma indefinida.
+class _CycleCard extends StatelessWidget {
+  const _CycleCard({required this.controller});
+
+  final ScannerController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = controller;
+    final active = c.isCycleActive;
+    final scanning = c.cyclePhase == CyclePhase.scanning;
+    final scanMin = c.cycleScanDuration.inMinutes;
+    final playMin = c.cyclePlayDuration.inMinutes;
+    final phaseTotal = scanning ? c.cycleScanDuration : c.cyclePlayDuration;
+    final progress = active && phaseTotal.inMilliseconds > 0
+        ? 1 - c.phaseRemaining.inMilliseconds / phaseTotal.inMilliseconds
+        : 0.0;
+
+    return _SectionCard(
+      title: 'Modo continuo',
+      trailing: active
+          ? _StatusChip(text: 'Ciclo ${c.cycleCount}', color: AppColors.green)
+          : const _StatusChip(text: 'Inactivo', color: AppColors.textMuted),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'Repite sin fin: $scanMin min de escaneo y $playMin min reproduciendo la '
+            'frecuencia sugerida obtenida en ese escaneo.',
+            style: const TextStyle(fontSize: 13, color: AppColors.textMuted),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              _PhaseStep(
+                icon: Icons.mic_rounded,
+                label: 'Escaneo · $scanMin min',
+                active: active && scanning,
+              ),
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 6),
+                child: Icon(Icons.arrow_forward_rounded, size: 18, color: AppColors.textMuted),
+              ),
+              _PhaseStep(
+                icon: Icons.graphic_eq_rounded,
+                label: 'Reproducción · $playMin min',
+                active: active && !scanning,
+              ),
+              const Padding(
+                padding: EdgeInsets.only(left: 6),
+                child: Icon(Icons.all_inclusive_rounded, size: 18, color: AppColors.green),
+              ),
+            ],
+          ),
+          if (active) ...[
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    scanning ? 'Escaneando…' : 'Reproduciendo ${formatHz(c.toneFrequency)}',
+                    style: const TextStyle(fontWeight: FontWeight.w600, color: AppColors.textDark),
+                  ),
+                ),
+                Text(
+                  formatDuration(c.phaseRemaining),
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.greenDark,
+                    fontFeatures: [FontFeature.tabularFigures()],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: LinearProgressIndicator(
+                value: progress.clamp(0.0, 1.0),
+                minHeight: 6,
+                backgroundColor: AppColors.greenTint,
+                color: AppColors.green,
+              ),
+            ),
+          ],
+          const SizedBox(height: 14),
+          active
+              ? OutlinedButton.icon(
+                  onPressed: c.stopAll,
+                  style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(52)),
+                  icon: const Icon(Icons.stop_rounded),
+                  label: const Text('Detener modo continuo'),
+                )
+              : FilledButton.icon(
+                  onPressed: c.isBusy ? null : c.startCycle,
+                  icon: const Icon(Icons.loop_rounded),
+                  label: const Text('Iniciar modo continuo'),
+                ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PhaseStep extends StatelessWidget {
+  const _PhaseStep({required this.icon, required this.label, required this.active});
+
+  final IconData icon;
+  final String label;
+  final bool active;
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+        decoration: BoxDecoration(
+          color: active ? AppColors.green : AppColors.greenTint,
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 16, color: active ? Colors.white : AppColors.greenDark),
+            const SizedBox(width: 6),
+            Flexible(
+              child: Text(
+                label,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: active ? Colors.white : AppColors.greenDark,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -392,7 +543,9 @@ class _PeakListCard extends StatelessWidget {
                   _PeakRow(
                     rank: i + 1,
                     peak: peaks[i],
-                    onPlay: () => controller.playTone(peaks[i].frequency),
+                    onPlay: controller.isCycleActive
+                        ? null
+                        : () => controller.playTone(peaks[i].frequency),
                   ),
               ],
             ),
@@ -405,7 +558,7 @@ class _PeakRow extends StatelessWidget {
 
   final int rank;
   final FrequencyPeak peak;
-  final VoidCallback onPlay;
+  final VoidCallback? onPlay;
 
   @override
   Widget build(BuildContext context) {
@@ -655,7 +808,7 @@ class _ToneCard extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           FilledButton.icon(
-            onPressed: c.togglePlaySuggested,
+            onPressed: c.isCycleActive ? null : c.togglePlaySuggested,
             icon: Icon(c.isPlaying ? Icons.stop_rounded : Icons.play_arrow_rounded),
             label: Text(
               c.isPlaying
@@ -667,7 +820,7 @@ class _ToneCard extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           OutlinedButton.icon(
-            onPressed: c.toggleTone,
+            onPressed: c.isCycleActive ? null : c.toggleTone,
             style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(48)),
             icon: Icon(c.isPlaying ? Icons.pause_rounded : Icons.tune_rounded),
             label: Text(c.isPlaying ? 'Pausar' : 'Reproducir ${formatHz(c.toneFrequency)}'),
@@ -676,7 +829,8 @@ class _ToneCard extends StatelessWidget {
           const Text(
             'Empieza con un volumen bajo. Los altavoces de los teléfonos suelen '
             'reproducir mal por debajo de ~150 Hz. Si escaneas mientras suena un '
-            'tono, el micrófono también lo captará.',
+            'tono, el micrófono también lo captará. El sonido sigue reproduciéndose '
+            'en segundo plano; puedes detenerlo desde la notificación.',
             style: TextStyle(fontSize: 12, color: AppColors.textMuted),
           ),
         ],
