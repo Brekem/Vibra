@@ -4,6 +4,11 @@ on:
   push:
   pull_request:
   workflow_dispatch:
+    inputs:
+      version:
+        description: "Versión a publicar como GitHub Release (p. ej. v1.0.0). Vacío = solo compilar."
+        required: false
+        default: ""
 
 permissions:
   contents: write
@@ -44,16 +49,33 @@ jobs:
           path: build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
 
-      # Al subir una etiqueta vX.Y.Z se publica un GitHub Release con el APK.
+      # Se publica un GitHub Release con el APK al subir una etiqueta vX.Y.Z o al
+      # lanzar el workflow a mano indicando la versión (crea la etiqueta).
+      - name: Versión del release
+        id: release
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            echo "tag=$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"
+          elif [[ -n "$INPUT_VERSION" ]]; then
+            echo "tag=$INPUT_VERSION" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Preparar APK para el release
-        if: startsWith(github.ref, 'refs/tags/v')
-        run: cp build/app/outputs/flutter-apk/app-release.apk "frequency-scanner-${GITHUB_REF_NAME}.apk"
+        if: steps.release.outputs.tag != ''
+        env:
+          TAG: ${{ steps.release.outputs.tag }}
+        run: cp build/app/outputs/flutter-apk/app-release.apk "frequency-scanner-${TAG}.apk"
 
       - name: Publicar release
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: steps.release.outputs.tag != ''
         uses: softprops/action-gh-release@v2
         with:
-          name: Frequency Scanner ${{ github.ref_name }}
+          tag_name: ${{ steps.release.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          name: Frequency Scanner ${{ steps.release.outputs.tag }}
           body_path: RELEASE_NOTES.md
-          files: frequency-scanner-${{ github.ref_name }}.apk
+          files: frequency-scanner-${{ steps.release.outputs.tag }}.apk
           fail_on_unmatched_files: true
+          make_latest: true
