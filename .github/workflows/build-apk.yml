@@ -5,6 +5,9 @@ on:
   pull_request:
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -40,3 +43,17 @@ jobs:
           name: frequency-scanner-release-apk
           path: build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
+
+      # Al subir una etiqueta vX.Y.Z se publica un GitHub Release con el APK.
+      - name: Preparar APK para el release
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: cp build/app/outputs/flutter-apk/app-release.apk "frequency-scanner-${GITHUB_REF_NAME}.apk"
+
+      - name: Publicar release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Frequency Scanner ${{ github.ref_name }}
+          body_path: RELEASE_NOTES.md
+          files: frequency-scanner-${{ github.ref_name }}.apk
+          fail_on_unmatched_files: true
